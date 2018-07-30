@@ -194,7 +194,7 @@ class QueueInteropTransport implements TransportInterface
             'priority' => null,
             'timeToLive' => null,
             'topic' => array('name' => 'messages', 'type' => AmqpTopic::TYPE_DIRECT),
-            'queue' => array(array('name' => 'messages')),
+            'queue' => array('routingKey' => array('name' => 'messages')),
         ));
 
         $resolver->setAllowedTypes('receiveTimeout', array('null', 'int'));
@@ -233,8 +233,8 @@ class QueueInteropTransport implements TransportInterface
             ),
         );
 
-        foreach ($this->options['queue'] as $queue) {
-            $result['queue'][] = $queue['name'];
+        foreach ($this->options['queue'] as $routingKey => $queue) {
+            $result['queue'][$routingKey] = $queue['name'];
         }
 
         return $result;
