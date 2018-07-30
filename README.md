@@ -56,8 +56,9 @@ In the transport DSN, you can add extra configuration. Here is the reference DSN
 
 ```
 enqueue://default
-    ?queue[name]=queue_name
+    ?queue[][name]=queue_name
     &topic[name]=topic_name
+    &topic[type]=topic|fanout|direct
     &deliveryDelay=1800
     &delayStrategy=Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy
     &timeToLive=3600
