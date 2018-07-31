@@ -11,6 +11,7 @@
 
 namespace Enqueue\MessengerAdapter;
 
+use Adtechpotok\Bundle\EnqueueMessengerAdapterBundle\EnvelopeItem\RoutingKeyItem;
 use Enqueue\AmqpTools\DelayStrategy;
 use Enqueue\AmqpTools\DelayStrategyAware;
 use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
@@ -18,6 +19,7 @@ use Enqueue\MessengerAdapter\EnvelopeItem\RepeatMessage;
 use Enqueue\MessengerAdapter\Exception\RejectMessageException;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\Exception\RequeueMessageException;
+use Interop\Amqp\AmqpMessage;
 use Interop\Amqp\AmqpTopic;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Serialization\DecoderInterface;
@@ -133,11 +135,17 @@ class QueueInteropTransport implements TransportInterface
 
         $encodedMessage = $this->encoder->encode($message);
 
+        /** @var AmqpMessage $psrMessage */
         $psrMessage = $psrContext->createMessage(
             $encodedMessage['body'],
             $encodedMessage['properties'] ?? array(),
             $encodedMessage['headers'] ?? array()
         );
+
+        /** @var RoutingKeyItem $routingKeyItem */
+        if (null !== $routingKeyItem = $message->get(RoutingKeyItem::class)) {
+            $psrMessage->setRoutingKey($routingKeyItem->getRoutingKey());
+        }
 
         $producer = $psrContext->createProducer();
 
@@ -193,8 +201,8 @@ class QueueInteropTransport implements TransportInterface
             'delayStrategy' => RabbitMqDelayPluginDelayStrategy::class,
             'priority' => null,
             'timeToLive' => null,
-            'topic' => array('name' => 'messages', 'type' => AmqpTopic::TYPE_DIRECT),
-            'queue' => array('routingKey' => array('name' => 'messages')),
+            'topic' => array('name' => 'messages', 'type' => AmqpTopic::TYPE_TOPIC),
+            'queue' => array(array('name' => 'messages')),
         ));
 
         $resolver->setAllowedTypes('receiveTimeout', array('null', 'int'));
@@ -229,7 +237,7 @@ class QueueInteropTransport implements TransportInterface
         $result = array(
             'topic' => array(
                 'name' => $topic ?? $this->options['topic']['name'],
-                'type' => $this->options['topic']['type'] ?? AmqpTopic::TYPE_DIRECT,
+                'type' => $this->options['topic']['type'] ?? AmqpTopic::TYPE_TOPIC,
             ),
         );
 
