@@ -16,6 +16,7 @@ use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
 use Enqueue\MessengerAdapter\EnvelopeItem\RepeatMessage;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\QueueInteropTransport;
+use Interop\Amqp\AmqpTopic;
 use Interop\Queue\PsrConsumer;
 use Interop\Queue\PsrQueue;
 use Interop\Queue\PsrTopic;
@@ -68,7 +69,7 @@ class QueueInteropTransportTest extends TestCase
 
         $contextManagerProphecy = $this->prophesize(ContextManager::class);
         $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
-        $contextManagerProphecy->ensureExists(array('topic' => array('name' => $topic, 'type' => 'direct'), 'queue' => array($queue)))->shouldBeCalled();
+        $contextManagerProphecy->ensureExists(array('topic' => array('name' => $topic, 'type' => AmqpTopic::TYPE_TOPIC), 'queue' => array($queue)))->shouldBeCalled();
 
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
@@ -157,7 +158,7 @@ class QueueInteropTransportTest extends TestCase
 
         $contextManagerProphecy = $this->prophesize(ContextManager::class);
         $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
-        $contextManagerProphecy->ensureExists(array('topic' => array('name' => $specificTopic, 'type' => 'direct'), 'queue' => array($queue)))->shouldBeCalled();
+        $contextManagerProphecy->ensureExists(array('topic' => array('name' => $specificTopic, 'type' => AmqpTopic::TYPE_TOPIC), 'queue' => array($queue)))->shouldBeCalled();
 
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
@@ -204,7 +205,7 @@ class QueueInteropTransportTest extends TestCase
 
         $contextManagerProphecy = $this->prophesize(ContextManager::class);
         $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
-        $contextManagerProphecy->recoverException($exception, array('topic' => array('name' => $topic, 'type' => 'direct'), 'queue' => array($queue)))->shouldBeCalled()->willReturn(false);
+        $contextManagerProphecy->recoverException($exception, array('topic' => array('name' => $topic, 'type' => AmqpTopic::TYPE_TOPIC), 'queue' => array($queue)))->shouldBeCalled()->willReturn(false);
 
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
