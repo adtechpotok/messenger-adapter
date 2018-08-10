@@ -22,7 +22,7 @@ class QueueName implements EnvelopeItemInterface
      *
      * @param string $queueName
      */
-    public function __construct($queueName = '')
+    public function __construct(string $queueName = '')
     {
         $this->setQueueName($queueName);
     }

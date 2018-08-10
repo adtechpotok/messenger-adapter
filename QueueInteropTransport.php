@@ -95,7 +95,7 @@ class QueueInteropTransport implements TransportInterface
                             'headers' => $message->getHeaders(),
                             'properties' => $message->getProperties(),
                         ))
-                        ->with((new QueueName())->setQueueName($name));
+                        ->with(new QueueName($name));
 
                     $handler($envelope);
 
