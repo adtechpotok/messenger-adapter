@@ -230,7 +230,7 @@ class QueueInteropTransport implements TransportInterface
         });
     }
 
-    private function getDestination(?Envelope $message): array
+    public function getDestination(?Envelope $message): array
     {
         /** @var TransportConfiguration|null $configuration */
         $configuration = $message ? $message->get(TransportConfiguration::class) : null;
