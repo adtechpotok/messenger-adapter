@@ -13,6 +13,7 @@ namespace Enqueue\MessengerAdapter\Tests;
 
 use Enqueue\AmqpTools\DelayStrategyAware;
 use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
+use Enqueue\MessengerAdapter\EnvelopeItem\QueueName;
 use Enqueue\MessengerAdapter\EnvelopeItem\RepeatMessage;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\QueueInteropTransport;
@@ -296,7 +297,8 @@ class QueueInteropTransportTest extends TestCase
             ->willReturn($psrContext);
 
         $envelope = new Envelope($psrMessage);
-        $envelopeRepeat = $envelope->with(new RepeatMessage(1, 3));
+        $envelopeRepeat = $envelope->with(new RepeatMessage(1, 3))
+            ->with((new QueueName())->setQueueName('messages'));
 
         $decoder = $this->createMock(DecoderInterface::class);
         $decoder->expects($this->once())

@@ -15,6 +15,7 @@ use Adtechpotok\Bundle\EnqueueMessengerAdapterBundle\EnvelopeItem\RoutingKeyItem
 use Enqueue\AmqpTools\DelayStrategy;
 use Enqueue\AmqpTools\DelayStrategyAware;
 use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
+use Enqueue\MessengerAdapter\EnvelopeItem\QueueName;
 use Enqueue\MessengerAdapter\EnvelopeItem\RepeatMessage;
 use Enqueue\MessengerAdapter\Exception\RejectMessageException;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
@@ -89,13 +90,13 @@ class QueueInteropTransport implements TransportInterface
                 }
 
                 try {
-                    $envelope = $this->decoder->decode(
-                        array(
+                    $envelope = $this->decoder->decode(array(
                             'body' => $message->getBody(),
                             'headers' => $message->getHeaders(),
                             'properties' => $message->getProperties(),
-                        )
-                    );
+                        ))
+                        ->with(new QueueName($name));
+
                     $handler($envelope);
 
                     $consumer->acknowledge($message);
