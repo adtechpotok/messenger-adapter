@@ -57,6 +57,7 @@ class QueueInteropTransportFactory implements TransportFactoryInterface
         [$contextManager, $options] = $this->parseDsn($dsn);
 
         return new QueueInteropTransport(
+            $this->container->get('event_dispatcher'),
             $this->decoder,
             $this->encoder,
             $contextManager,

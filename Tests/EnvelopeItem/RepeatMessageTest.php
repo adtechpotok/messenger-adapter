@@ -19,7 +19,7 @@ class RepeatMessageTest extends TestCase
     public function testSerialization()
     {
         $message = new RepeatMessage(1, 3);
-        $this->assertEquals(new RepeatMessage(1, 3, 0), unserialize(serialize($message)));
+        $this->assertEquals(new RepeatMessage(1, 3, 1), unserialize(serialize($message)));
     }
 
     public function testNowDelayToMs()

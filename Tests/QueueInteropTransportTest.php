@@ -15,8 +15,13 @@ use Enqueue\AmqpTools\DelayStrategyAware;
 use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
 use Enqueue\MessengerAdapter\EnvelopeItem\QueueName;
 use Enqueue\MessengerAdapter\EnvelopeItem\RepeatMessage;
+use Enqueue\MessengerAdapter\Event\EnvelopeExecuteFailEvent;
+use Enqueue\MessengerAdapter\Event\EnvelopeFailOnRepeat;
+use Enqueue\MessengerAdapter\Event\EnvelopeReachRepeatLimit;
+use Enqueue\MessengerAdapter\Event\MessageDecodeFailEvent;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\QueueInteropTransport;
+use Enqueue\Null\NullMessage;
 use Interop\Amqp\AmqpTopic;
 use Interop\Queue\PsrConsumer;
 use Interop\Queue\PsrQueue;
@@ -26,6 +31,7 @@ use Interop\Queue\PsrContext;
 use Interop\Queue\PsrProducer;
 use Interop\Queue\PsrDestination;
 use Interop\Queue\PsrMessage;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\SenderInterface;
 use Symfony\Component\Messenger\Transport\Serialization\EncoderInterface;
@@ -77,6 +83,7 @@ class QueueInteropTransportTest extends TestCase
 
         $transport = $this->getTransport(
             null,
+            null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
             array(
@@ -123,6 +130,7 @@ class QueueInteropTransportTest extends TestCase
 
         $transport = $this->getTransport(
             null,
+            null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
             array(
@@ -165,6 +173,7 @@ class QueueInteropTransportTest extends TestCase
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
 
         $transport = $this->getTransport(
+            null,
             null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
@@ -213,6 +222,7 @@ class QueueInteropTransportTest extends TestCase
 
         $transport = $this->getTransport(
             null,
+            null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
             array(
@@ -240,7 +250,7 @@ class QueueInteropTransportTest extends TestCase
         $contextManagerProphecy = $this->prophesize(ContextManager::class);
         $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
 
-        $transport = $this->getTransport(null, null, $contextManagerProphecy->reveal());
+        $transport = $this->getTransport(null, null, null, $contextManagerProphecy->reveal());
         $handlerArgument = 'not-null';
         $handler = function ($argument) use (&$handlerArgument, $transport) {
             $handlerArgument = $argument;
@@ -311,7 +321,7 @@ class QueueInteropTransportTest extends TestCase
             ->with($this->equalTo($envelopeRepeat))
             ->willReturn(array('body' => null));
 
-        $transport = $this->getTransport($decoder, $encoder, $contextManager);
+        $transport = $this->getTransport(null, $decoder, $encoder, $contextManager);
         $transport->receive(function ($envelope) use ($transport) {
             $transport->stop();
             throw new RepeatMessageException();
@@ -354,14 +364,245 @@ class QueueInteropTransportTest extends TestCase
             ->method('decode')
             ->willReturn($envelope);
 
-        $transport = $this->getTransport($decoder, null, $contextManager);
+        $transport = $this->getTransport(null, $decoder, null, $contextManager);
         $transport->receive(function ($envelope) use ($transport) {
             $transport->stop();
             throw new RepeatMessageException();
         });
     }
 
+    public function testDispatchEnvelopeExecuteFailEvent()
+    {
+        $message = new NullMessage(
+            'testDispatchMessageDecodeFailEvent',
+            array('property' => 'testDispatchMessageDecodeFailEvent'),
+            array('head' => 'testDispatchMessageDecodeFailEvent')
+        );
+        $queueName = 'messages';
+        $envelope = (new Envelope(new \stdClass()))->with(
+            new QueueName($queueName)
+        );
+        $exception = new \Exception('Execute fail');
+
+        $psrConsumerProphecy = $this->createMock(PsrConsumer::class);
+        $psrConsumerProphecy->expects($this->exactly(1))
+            ->method('receive')
+            ->with()
+            ->willReturn($message, null);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('reject')
+            ->with($message)
+            ->willReturn(true);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('acknowledge')
+            ->willThrowException($exception);
+
+        $psrQueueProphecy = $this->prophesize(PsrQueue::class);
+        $psrQueue = $psrQueueProphecy->reveal();
+
+        $psrContextProphecy = $this->prophesize(PsrContext::class);
+        $psrContextProphecy->createQueue($queueName)->shouldBeCalled()->willReturn($psrQueue);
+        $psrContextProphecy->createConsumer($psrQueue)->shouldBeCalled()->willReturn($psrConsumerProphecy);
+
+        $contextManagerProphecy = $this->prophesize(ContextManager::class);
+        $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects($this->once())
+            ->method('dispatch')
+            ->with('ENVELOPE_EXECUTE_FAIL', new EnvelopeExecuteFailEvent($envelope, $message, $queueName, $exception))
+            ->willReturn(true);
+
+        $decoder = $this->createMock(DecoderInterface::class);
+        $decoder->expects($this->once())
+            ->method('decode')
+            ->willReturn($envelope);
+
+        $transport = $this->getTransport($dispatcher, $decoder, null, $contextManagerProphecy->reveal());
+
+        $transport->receive(function () use ($transport) {
+            $transport->stop();
+        });
+    }
+
+    public function testDispatchEnvelopeFailOnRepeat()
+    {
+        $message = new NullMessage(
+            'testDispatchMessageDecodeFailEvent',
+            array('property' => 'testDispatchMessageDecodeFailEvent'),
+            array('head' => 'testDispatchMessageDecodeFailEvent')
+        );
+        $queueName = 'messages';
+        $envelope = (new Envelope(new \stdClass()))
+            ->with(new QueueName($queueName))
+            ->with(new RepeatMessage(0, 2, 1));
+
+        $exception = new \RuntimeException('Send fail');
+
+        $psrConsumerProphecy = $this->createMock(PsrConsumer::class);
+        $psrConsumerProphecy->expects($this->exactly(1))
+            ->method('receive')
+            ->with()
+            ->willReturn($message, null);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('reject')
+            ->with($message)
+            ->willReturn(true);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('acknowledge')
+            ->willThrowException(new RepeatMessageException(0));
+
+        $psrQueueProphecy = $this->prophesize(PsrQueue::class);
+        $psrQueue = $psrQueueProphecy->reveal();
+
+        $psrContextProphecy = $this->createMock(PsrContext::class);
+        $psrContextProphecy->expects($this->once())
+            ->method('createQueue')
+            ->willReturn($psrQueue);
+
+        $psrContextProphecy->expects($this->once())
+            ->method('createConsumer')
+            ->willReturn($psrConsumerProphecy);
+
+        $psrContextProphecy->expects($this->once())
+            ->method('createTopic')
+            ->willThrowException($exception);
+
+        $contextManagerProphecy = $this->prophesize(ContextManager::class);
+        $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects($this->once())
+            ->method('dispatch')
+            ->with('ENVELOPE_FAIL_ON_REPEAT', new EnvelopeFailOnRepeat($envelope, $message, $queueName, 1, 2, $exception))
+            ->willReturn(true);
+
+        $decoder = $this->createMock(DecoderInterface::class);
+        $decoder->expects($this->once())
+            ->method('decode')
+            ->willReturn($envelope);
+
+        $transport = $this->getTransport($dispatcher, $decoder, null, $contextManagerProphecy->reveal());
+
+        $transport->receive(function () use ($transport) {
+            $transport->stop();
+        });
+    }
+
+    public function testDispatchEnvelopeReachRepeatLimit()
+    {
+        $message = new NullMessage(
+            'testDispatchMessageDecodeFailEvent',
+            array('property' => 'testDispatchMessageDecodeFailEvent'),
+            array('head' => 'testDispatchMessageDecodeFailEvent')
+        );
+        $queueName = 'messages';
+        $envelope = (new Envelope(new \stdClass()))
+            ->with(new QueueName($queueName))
+            ->with(new RepeatMessage(0, 1, 1));
+
+        $exception = new RepeatMessageException(0);
+
+        $psrConsumerProphecy = $this->createMock(PsrConsumer::class);
+        $psrConsumerProphecy->expects($this->exactly(1))
+            ->method('receive')
+            ->with()
+            ->willReturn($message, null);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('reject')
+            ->with($message)
+            ->willReturn(true);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('acknowledge')
+            ->willThrowException($exception);
+
+        $psrQueueProphecy = $this->prophesize(PsrQueue::class);
+        $psrQueue = $psrQueueProphecy->reveal();
+
+        $psrContextProphecy = $this->prophesize(PsrContext::class);
+        $psrContextProphecy->createQueue($queueName)->shouldBeCalled()->willReturn($psrQueue);
+        $psrContextProphecy->createConsumer($psrQueue)->shouldBeCalled()->willReturn($psrConsumerProphecy);
+
+        $contextManagerProphecy = $this->prophesize(ContextManager::class);
+        $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects($this->once())
+            ->method('dispatch')
+            ->with('ENVELOPE_REACH_REPEAT_LIMIT', new EnvelopeReachRepeatLimit($envelope, $message, $queueName, 1, 1, $exception))
+            ->willReturn(true);
+
+        $decoder = $this->createMock(DecoderInterface::class);
+        $decoder->expects($this->once())
+            ->method('decode')
+            ->willReturn($envelope);
+
+        $transport = $this->getTransport($dispatcher, $decoder, null, $contextManagerProphecy->reveal());
+
+        $transport->receive(function () use ($transport) {
+            $transport->stop();
+        });
+    }
+
+    public function testDispatchMessageDecodeFailEvent()
+    {
+        $message = new NullMessage(
+            'testDispatchMessageDecodeFailEvent',
+            array('property' => 'testDispatchMessageDecodeFailEvent'),
+            array('head' => 'testDispatchMessageDecodeFailEvent')
+        );
+
+        $queueName = 'messages';
+
+        $exception = new \Exception('Decode fail');
+
+        $decoder = $this->createMock(DecoderInterface::class);
+        $decoder->expects($this->once())
+            ->method('decode')
+            ->willThrowException($exception);
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects($this->once())
+            ->method('dispatch')
+            ->with('MESSAGE_DECODE_FAIL', new MessageDecodeFailEvent($message, $queueName, $exception))
+            ->willReturn(true);
+
+        $psrConsumerProphecy = $this->createMock(PsrConsumer::class);
+        $psrConsumerProphecy->expects($this->exactly(2))
+            ->method('receive')
+            ->with()
+            ->willReturn($message, null);
+
+        $psrConsumerProphecy->expects($this->once())
+            ->method('reject')
+            ->with($message)
+            ->willReturn(true);
+
+        $psrQueueProphecy = $this->prophesize(PsrQueue::class);
+        $psrQueue = $psrQueueProphecy->reveal();
+
+        $psrContextProphecy = $this->prophesize(PsrContext::class);
+        $psrContextProphecy->createQueue('messages')->shouldBeCalled()->willReturn($psrQueue);
+        $psrContextProphecy->createConsumer($psrQueue)->shouldBeCalled()->willReturn($psrConsumerProphecy);
+
+        $contextManagerProphecy = $this->prophesize(ContextManager::class);
+        $contextManagerProphecy->psrContext()->shouldBeCalled()->willReturn($psrContextProphecy->reveal());
+
+        $transport = $this->getTransport($dispatcher, $decoder, null, $contextManagerProphecy->reveal());
+
+        $transport->receive(function () use ($transport) {
+            $transport->stop();
+        });
+    }
+
     private function getTransport(
+        EventDispatcherInterface $dispatcher = null,
         DecoderInterface $decoder = null,
         EncoderInterface $encoder = null,
         ContextManager $contextManager = null,
@@ -369,6 +610,7 @@ class QueueInteropTransportTest extends TestCase
         $debug = false
     ) {
         return new QueueInteropTransport(
+            $dispatcher ?: $this->prophesize(EventDispatcherInterface::class)->reveal(),
             $decoder ?: $this->prophesize(DecoderInterface::class)->reveal(),
             $encoder ?: $this->prophesize(EncoderInterface::class)->reveal(),
             $contextManager ?: $this->prophesize(ContextManager::class)->reveal(),

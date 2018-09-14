@@ -17,6 +17,7 @@ use Enqueue\MessengerAdapter\QueueInteropTransportFactory;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Enqueue\MessengerAdapter\AmqpContextManager;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Transport\Serialization\EncoderInterface;
 use Symfony\Component\Messenger\Transport\Serialization\DecoderInterface;
 use Interop\Queue\PsrContext;
@@ -41,10 +42,22 @@ class QueueInteropTransportFactoryTest extends TestCase
         $container->has('enqueue.transport.default.context')->willReturn(true);
         $container->get('enqueue.transport.default.context')->willReturn($queuePsrContext);
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class)->reveal();
+        $container->has('event_dispatcher')->willReturn(true);
+        $container->get('event_dispatcher')->willReturn($dispatcher);
+
         $factory = $this->getFactory($decoder->reveal(), $encoder->reveal(), $container->reveal());
         $dsn = 'enqueue://default';
 
-        $expectedTransport = new QueueInteropTransport($decoder->reveal(), $encoder->reveal(), new AmqpContextManager($queuePsrContext), array(), true);
+        $expectedTransport = new QueueInteropTransport(
+            $dispatcher,
+            $decoder->reveal(),
+            $encoder->reveal(),
+            new AmqpContextManager($queuePsrContext),
+            array(),
+            true
+        );
+
         $this->assertEquals($expectedTransport, $factory->createTransport($dsn, array()));
 
         // Ensure BC for Symfony beta 4.1
@@ -62,10 +75,15 @@ class QueueInteropTransportFactoryTest extends TestCase
         $container->has('enqueue.transport.default.context')->willReturn(true);
         $container->get('enqueue.transport.default.context')->willReturn($queuePsrContext);
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class)->reveal();
+        $container->has('event_dispatcher')->willReturn(true);
+        $container->get('event_dispatcher')->willReturn($dispatcher);
+
         $factory = $this->getFactory($decoder->reveal(), $encoder->reveal(), $container->reveal());
         $dsn = 'enqueue://default?queue[name]=test&topic[name]=test&deliveryDelay=100&delayStrategy=Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy&timeToLive=100&receiveTimeout=100&priority=100';
 
         $expectedTransport = new QueueInteropTransport(
+            $dispatcher,
             $decoder->reveal(),
             $encoder->reveal(),
             new AmqpContextManager($queuePsrContext),

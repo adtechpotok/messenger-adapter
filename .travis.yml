@@ -16,7 +16,7 @@ before_install:
   - export PATH="$PATH:$HOME/.composer/vendor/bin"
 
 install:
-  - composer update --no-progress --no-suggest --ansi
+  - composer update --ansi
 
 script:
   - php-cs-fixer fix --dry-run --diff --no-ansi

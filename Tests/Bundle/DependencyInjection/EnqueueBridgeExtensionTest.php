@@ -39,8 +39,17 @@ class EnqueueBridgeExtensionTest extends TestCase
     {
         $containerBuilderProphecy = $this->prophesize(ContainerBuilder::class);
         $containerBuilderProphecy->fileExists(Argument::any())->willReturn(false);
+
         $containerBuilderProphecy->setDefinition('enqueue.messenger_transport.factory', Argument::allOf(Argument::type(Definition::class), Argument::that(function (Definition $definition) {
             return $definition->hasTag('messenger.transport_factory');
+        })))->shouldBeCalled();
+
+        $containerBuilderProphecy->setDefinition('Enqueue\MessengerAdapter\EventSubscriber\QueueInteropTransportFailSubscriber', Argument::allOf(Argument::type(Definition::class), Argument::that(function (Definition $definition) {
+            return $definition->hasTag('kernel.event_subscriber');
+        })))->shouldBeCalled();
+
+        $containerBuilderProphecy->setDefinition('Enqueue\MessengerAdapter\Service\Contract\MessageFailLogStorageInterface', Argument::allOf(Argument::type(Definition::class), Argument::that(function (Definition $definition) {
+            return true;
         })))->shouldBeCalled();
 
         $this->extension->load(array(), $containerBuilderProphecy->reveal());
