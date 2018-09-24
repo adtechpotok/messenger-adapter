@@ -19,6 +19,7 @@ use Enqueue\MessengerAdapter\Event\EnvelopeExecuteFailEvent;
 use Enqueue\MessengerAdapter\Event\EnvelopeFailOnRepeat;
 use Enqueue\MessengerAdapter\Event\EnvelopeReachRepeatLimit;
 use Enqueue\MessengerAdapter\Event\MessageDecodeFailEvent;
+use Enqueue\MessengerAdapter\Event\OnSendMessageEvent;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\QueueInteropTransport;
 use Enqueue\Null\NullMessage;
@@ -81,8 +82,12 @@ class QueueInteropTransportTest extends TestCase
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class);
+        $event = new OnSendMessageEvent($envelope, $psrMessage);
+        $dispatcher->dispatch('ON_SEND_MESSAGE', $event)->shouldBeCalled()->willReturn($event);
+
         $transport = $this->getTransport(
-            null,
+            $dispatcher->reveal(),
             null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
@@ -128,8 +133,12 @@ class QueueInteropTransportTest extends TestCase
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class);
+        $event = new OnSendMessageEvent($envelope, $psrMessage);
+        $dispatcher->dispatch('ON_SEND_MESSAGE', $event)->shouldBeCalled()->willReturn($event);
+
         $transport = $this->getTransport(
-            null,
+            $dispatcher->reveal(),
             null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
@@ -172,8 +181,12 @@ class QueueInteropTransportTest extends TestCase
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class);
+        $event = new OnSendMessageEvent($envelope, $psrMessage);
+        $dispatcher->dispatch('ON_SEND_MESSAGE', $event)->shouldBeCalled()->willReturn($event);
+
         $transport = $this->getTransport(
-            null,
+            $dispatcher->reveal(),
             null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
@@ -220,8 +233,12 @@ class QueueInteropTransportTest extends TestCase
         $encoderProphecy = $this->prophesize(EncoderInterface::class);
         $encoderProphecy->encode($envelope)->shouldBeCalled()->willReturn(array('body' => 'foo'));
 
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class);
+        $event = new OnSendMessageEvent($envelope, $psrMessage);
+        $dispatcher->dispatch('ON_SEND_MESSAGE', $event)->shouldBeCalled()->willReturn($event);
+
         $transport = $this->getTransport(
-            null,
+            $dispatcher->reveal(),
             null,
             $encoderProphecy->reveal(),
             $contextManagerProphecy->reveal(),
@@ -321,7 +338,11 @@ class QueueInteropTransportTest extends TestCase
             ->with($this->equalTo($envelopeRepeat))
             ->willReturn(array('body' => null));
 
-        $transport = $this->getTransport(null, $decoder, $encoder, $contextManager);
+        $dispatcher = $this->prophesize(EventDispatcherInterface::class);
+        $event = new OnSendMessageEvent($envelopeRepeat, $psrMessage);
+        $dispatcher->dispatch('ON_SEND_MESSAGE', $event)->shouldBeCalled()->willReturn($event);
+
+        $transport = $this->getTransport($dispatcher->reveal(), $decoder, $encoder, $contextManager);
         $transport->receive(function ($envelope) use ($transport) {
             $transport->stop();
             throw new RepeatMessageException();

@@ -11,7 +11,6 @@
 
 namespace Enqueue\MessengerAdapter;
 
-use Adtechpotok\Bundle\EnqueueMessengerAdapterBundle\EnvelopeItem\RoutingKeyItem;
 use Enqueue\AmqpTools\DelayStrategy;
 use Enqueue\AmqpTools\DelayStrategyAware;
 use Enqueue\AmqpTools\RabbitMqDelayPluginDelayStrategy;
@@ -22,6 +21,7 @@ use Enqueue\MessengerAdapter\Event\EnvelopeFailOnRepeat;
 use Enqueue\MessengerAdapter\Event\EnvelopeReachRepeatLimit;
 use Enqueue\MessengerAdapter\Event\MessageDecodeFailEvent;
 use Enqueue\MessengerAdapter\Event\Events;
+use Enqueue\MessengerAdapter\Event\OnSendMessageEvent;
 use Enqueue\MessengerAdapter\Exception\RepeatMessageException;
 use Enqueue\MessengerAdapter\Exception\RequeueMessageException;
 use Interop\Amqp\AmqpMessage;
@@ -224,10 +224,13 @@ class QueueInteropTransport implements TransportInterface
             $encodedMessage['headers'] ?? array()
         );
 
-        /** @var RoutingKeyItem $routingKeyItem */
-        if (null !== $routingKeyItem = $message->get(RoutingKeyItem::class)) {
-            $psrMessage->setRoutingKey($routingKeyItem->getRoutingKey());
-        }
+        /** @var OnSendMessageEvent $event */
+        $event = $this->dispatcher->dispatch(
+            Events::ON_SEND_MESSAGE,
+            new OnSendMessageEvent($message, $psrMessage)
+        );
+
+        $psrMessage = $event->getMessage();
 
         $producer = $psrContext->createProducer();
 
