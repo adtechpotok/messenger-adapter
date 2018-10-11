@@ -255,7 +255,7 @@ class QueueInteropTransportTest extends TestCase
     public function testNullHandler()
     {
         $psrConsumerProphecy = $this->prophesize(PsrConsumer::class);
-        $psrConsumerProphecy->receive(0)->shouldBeCalled()->willReturn(null);
+        $psrConsumerProphecy->receive(30000)->shouldBeCalled()->willReturn(null);
 
         $psrQueueProphecy = $this->prophesize(PsrQueue::class);
         $psrQueue = $psrQueueProphecy->reveal();
@@ -284,7 +284,7 @@ class QueueInteropTransportTest extends TestCase
         $psrConsumer = $this->createMock(PsrConsumer::class);
         $psrConsumer->expects($this->once())
             ->method('receive')
-            ->with($this->equalTo(0))
+            ->with($this->equalTo(30000))
             ->willReturn($psrMessage);
         $psrConsumer->expects($this->once())
             ->method('reject')
@@ -356,7 +356,7 @@ class QueueInteropTransportTest extends TestCase
         $psrConsumer = $this->createMock(PsrConsumer::class);
         $psrConsumer->expects($this->once())
             ->method('receive')
-            ->with($this->equalTo(0))
+            ->with($this->equalTo(30000))
             ->willReturn($psrMessage);
         $psrConsumer->expects($this->once())
             ->method('reject')
